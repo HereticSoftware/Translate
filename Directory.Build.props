@@ -38,7 +38,7 @@
     <!--<PackageIcon>Icon.png</PackageIcon>-->
     <PackageReadmeFile>README.md</PackageReadmeFile>
 
-    <PackageOutputPath>artifacts</PackageOutputPath>
+    <PackageOutputPath>$([System.IO.Path]::Combine($(MSBuildThisFileDirectory), "packages"))</PackageOutputPath>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>

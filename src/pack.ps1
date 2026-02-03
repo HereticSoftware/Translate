@@ -1,9 +1,6 @@
 [CmdletBinding(PositionalBinding = $false)]
 param (
     [Parameter()]
-    [string] $output = "",
-
-    [Parameter()]
     [switch] $clearOutput = $false,
 
     [Parameter()]
@@ -17,8 +14,8 @@ Import-Module $PSScriptRoot\..\Invoke-Process.psm1
 
 if ($clearOutput)
 {
-    $dir = Resolve-Path -Path ($output -ne "" ? $output : "../artifacts")
-    $items = Get-ChildItem -Path $dir -Filter "Translate*nupkg"
+    $dir = Resolve-Path -Path "../packages"
+    $items = Get-ChildItem -Path $dir -Filter "*nupkg"
     if ($items.Length -gt 0)
     {
         Write-Host "Removing $($items.Length) items (.*nupkg) at '$dir'"
@@ -33,9 +30,6 @@ $arguments = "-c", "Release"
 
 foreach ($project in $projects) {
     $expression = $cmd + $project + $arguments;
-    if ($output -ne "") {
-        $expression += "-o", $output
-    }
     if ($version -ne "") {
         $expression += "-p:Version=$version", "-p:DisableGitVersionTask=true"
     }

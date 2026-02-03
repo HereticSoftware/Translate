@@ -53,7 +53,7 @@ jobs:
 
     - name: Push
       if: inputs.publish
-      working-directory: artifacts
+      working-directory: packages
       env:
         SOURCE_URL: https://api.nuget.org/v3/index.json
         NUGET_AUTH_TOKEN: ${{ steps.login.outputs.NUGET_API_KEY }}
