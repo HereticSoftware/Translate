@@ -12,7 +12,7 @@ on:
     - test/**
 jobs:
   pipeline:
-    uses: HereticSoftware/Translate/.github/workflows/_.yaml@main
+    uses: HereticSoftware/Metaphrase/.github/workflows/_.yaml@main
     permissions:
       id-token: write
     with:

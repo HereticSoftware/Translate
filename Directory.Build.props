@@ -19,9 +19,9 @@
 
   <!-- Repository -->
   <PropertyGroup>
-    <Authors>Raven Tail</Authors>
+    <Authors>Heretic Software</Authors>
     <Copyright>Copyright (c) $([System.DateTimeOffset]::UtcNow.ToString("yyyy")) $(Authors)</Copyright>
-    <RepositoryUrl>https://www.github.com/HereticSoftware/Translate</RepositoryUrl>
+    <RepositoryUrl>https://www.github.com/HereticSoftware/Metaphrase</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <RepositoryLicense>MIT</RepositoryLicense>
     <RepositoryDescription></RepositoryDescription>

@@ -1,42 +1,42 @@
-# Translate
+# Metaphrase
 
-[![Build Action](https://github.com/HereticSoftware/Translate/actions/workflows/build.yaml/badge.svg)](https://github.com/HereticSoftware/Translate/actions/workflows/build.yaml)
-[![Publish Action](https://github.com/HereticSoftware/Translate/actions/workflows/publish.yaml/badge.svg)](https://github.com/HereticSoftware/Translate/actions/workflows/publish.yaml)
-[![License](https://img.shields.io/github/license/HereticSoftware/Translate?style=flat)](https://github.com/HereticSoftware/Translate/blob/main/LICENSE)
+[![Build Action](https://github.com/HereticSoftware/Metaphrase/actions/workflows/build.yaml/badge.svg)](https://github.com/HereticSoftware/Metaphrase/actions/workflows/build.yaml)
+[![Publish Action](https://github.com/HereticSoftware/Metaphrase/actions/workflows/publish.yaml/badge.svg)](https://github.com/HereticSoftware/Metaphrase/actions/workflows/publish.yaml)
+[![License](https://img.shields.io/github/license/HereticSoftware/Metaphrase?style=flat)](https://github.com/HereticSoftware/Metaphrase/blob/main/LICENSE)
 [![.NET 8](https://img.shields.io/badge/.NET%208-%23512bd4?style=flat)](https://dotnet.microsoft.com/)
 [![.NET 9](https://img.shields.io/badge/.NET%209-%23512bd4?style=flat)](https://dotnet.microsoft.com/)
-[![Downloads](https://img.shields.io/nuget/dt/Translate?style=flat)](https://www.nuget.org/packages/Translate.Contracts/)
+[![Downloads](https://img.shields.io/nuget/dt/Metaphrase?style=flat)](https://www.nuget.org/packages/Metaphrase/)
 
-A C# port of the [ngx-Translate](https://github.com/ngx-Translate/core). The port is not one to one and also aims to be more C# friendly where possible.
+A C# port of the [ngx-translate](https://github.com/ngx-translate/core). The port is not one to one and also aims to be more C# friendly where possible.
 
-The library provides you with a `TranslateService` which combined with a `TranslateLoader` (HttpLoader built in) enables you to load, compile and display your translations using formatting with keys. For much stronger formatting there exists a supporting package that uses the awesome [SmartFormat](https://github.com/axuno/SmartFormat/) package.
+The library provides you with a `TranslateService` which combined with a `TranslateLoader` (HttpLoader built in) enables you to load, compile and display your translations. You format the strings keys. For a much stronger formatting a package that uses the awesome [SmartFormat](https://github.com/axuno/SmartFormat/) project is provided.
 
 ## Packages
 
 | Package | Stable | Pre |
 |:--|:--|:--|
-| **Translate** | [![Translate](https://img.shields.io/nuget/v/Translate)](https://www.nuget.org/packages/Translate) | [![Translate](https://img.shields.io/nuget/vpre/Translate)](https://www.nuget.org/packages/Translate) |
-| **Translate.SmartFormat** | [![Translate.SmartFormat](https://img.shields.io/nuget/v/Translate.SmartFormat)](https://www.nuget.org/packages/Translate.SmartFormat) | [![Translate.SmartFormat](https://img.shields.io/nuget/vpre/Translate.SmartFormat)](https://www.nuget.org/packages/Translate.SmartFormat) |
+| **Metaphrase** | [![Metaphrase](https://img.shields.io/nuget/v/Metaphrase)](https://www.nuget.org/packages/Metaphrase) | [![Metaphrase](https://img.shields.io/nuget/vpre/Metaphrase)](https://www.nuget.org/packages/Metaphrase) |
+| **Metaphrase.SmartFormat** | [![Metaphrase.SmartFormat](https://img.shields.io/nuget/v/Metaphrase.SmartFormat)](https://www.nuget.org/packages/Metaphrase.SmartFormat) | [![Metaphrase.SmartFormat](https://img.shields.io/nuget/vpre/Metaphrase.SmartFormat)](https://www.nuget.org/packages/Metaphrase.SmartFormat) |
 
 # Usage
 
 Description
-- Translate
+- Metaphrase
     - Contains the `abstractions`, `defaults`, `primitives`, `http loader` and the `service`.
-- Translate.SmartFormat
+- Metaphrase.SmartFormat
     - Contains the `SmartFormatParser`.
 
 Installation:
-- `Translate` in projects that you want to use the service or any of the primitives.
-- `Translate.SmartFormat` in projects that use the service and you want to replace the default parser.
+- `Metaphrase` in projects that you want to use the service or any of the primitives.
+- `Metaphrase.SmartFormat` in projects that use the service and you want to replace the default parser.
 
 # Getting Started
 
 The section will describe how to get started with Translate in a `Blazor Wasm` using the `HttpLoader` storing the language files at `wwwroot/i18n`.
 
-1. Add the `Translate` package.
+1. Add the `Metaphrase` package.
 ```console
-dotnet add package Translate
+dotnet add package Metaphrase
 ```
 2. Add the appropriate services to the service provider.
 ```csharp
@@ -50,14 +50,14 @@ services.AddScoped<TranslateService>(); // This will use the default parser
 
 For the tanslation `key: hello` and `value: Hello` you can do:
 ```csharp
-Translate.Instant("hello") // prints "Hello"
-Translate | "hello" // prints "Hello"
+translate.Instant("hello") // prints "Hello"
+translate | "hello" // prints "Hello"
 ```
 
 For the translation `key: welcome`, `value: Welcome {user}!` and `param: user`.
 ```csharp
-Translate.Instant("hello", new { user = "panos" }) // prints "Welcome panos"!
-Translate | "hello" | new { user = "panos" } // prints "Welcome panos"!
+translate.Instant("hello", new { user = "panos" }) // prints "Welcome panos"!
+translate | "hello" | new { user = "panos" } // prints "Welcome panos"!
 ```
 
 # Contributing

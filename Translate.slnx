@@ -1,9 +1,0 @@
-<Solution>
-  <Folder Name="/src/" Id="02ea681e-c7d8-13c7-8484-4ac65e1b71e8">
-    <Project Path="src/Translate.SmartFormat/Translate.SmartFormat.csproj" Id="f53eae23-f085-43da-9d3b-73684be7f8a2" />
-    <Project Path="src/Translate/Translate.csproj" />
-  </Folder>
-  <Folder Name="/test/" Id="f76ce143-01e0-4094-8904-4ecfabc005a2">
-    <Project Path="test/Translate.Test/Translate.Test.csproj" />
-  </Folder>
-</Solution>

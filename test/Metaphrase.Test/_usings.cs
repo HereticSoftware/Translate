@@ -1,0 +1,10 @@
+﻿global using R3;
+global using Metaphrase;
+global using Metaphrase.Abstract;
+global using Metaphrase.Defaults;
+global using Metaphrase.HttpLoader;
+global using Metaphrase.Primitives;
+global using Metaphrase.Primitives.Events;
+global using System.Collections.Concurrent;
+global using System.Diagnostics.CodeAnalysis;
+global using System.Text;
