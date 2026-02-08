@@ -38,7 +38,7 @@ public sealed class TranslateServiceTests
         var service = new TranslateService(loader: loader);
 
         service.SetCurrentLang("en").Subscribe(); // Call 1 and 0 return
-        service.ResetLang("en");
+        service.Reset("en");
 
         await That(loader.CallCount).IsEqualTo(1);
         await That(loader.ReturnCount).IsEqualTo(0);
@@ -55,7 +55,7 @@ public sealed class TranslateServiceTests
         await That(loader.CallCount).IsEqualTo(2);
         await That(loader.ReturnCount).IsEqualTo(1);
 
-        await That(service.Langs.Count).IsEqualTo(1);
+        await That(service.Available.Count).IsEqualTo(1);
     }
 
     [Test]

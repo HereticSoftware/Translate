@@ -17,17 +17,22 @@ public sealed class TranslateService
     private readonly TranslateCompiler compiler;
     private readonly TranslateServiceOptions options;
 
-    private readonly ConcurrentLazyDictionary<string, TranslationLoader> translationsLoading = [];
+    private readonly ConcurrentLazyDictionary<string, TranslationLoader> translationLoaders = [];
 
     /// <summary>
     /// The default language to fallback when translations are missing in the current language.
     /// </summary>
-    public string DefaultLang => store.DefaultLang;
+    public string Fallback => store.Fallback;
 
     /// <summary>
     /// The language currently used.
     /// </summary>
-    public string CurrentLang => store.Lang;
+    public string Current => store.Current;
+
+    /// <summary>
+    /// A list of available languages.
+    /// </summary>
+    public HashSet<string> Available => store.Available;
 
     /// <summary>
     /// A list of translations per language.
@@ -35,19 +40,14 @@ public sealed class TranslateService
     public Languages Languages => store.Languages;
 
     /// <summary>
-    /// A list of available languages.
+    /// An observable to listen to fallback language change events.
     /// </summary>
-    public HashSet<string> Langs => store.Langs;
-
-    /// <summary>
-    /// An observable to listen to default language change events.
-    /// </summary>
-    public Observable<LanguageChangeEvent> OnDefaultLangChange => store.OnDefaultLangChange;
+    public Observable<LanguageChangeEvent> OnFallbackLangChange => store.OnFallbackLangChange;
 
     /// <summary>
     /// An observable to listen to language change events.
     /// </summary>
-    public Observable<LanguageChangeEvent> OnLangChange => store.OnLangChange;
+    public Observable<LanguageChangeEvent> OnCurrentChange => store.OnCurrentChange;
 
     /// <summary>
     /// An observable to listen to translation change events.
@@ -77,7 +77,7 @@ public sealed class TranslateService
 
         if (!string.IsNullOrEmpty(this.options.DefaultLanguage))
         {
-            this.store.DefaultLang = this.options.DefaultLanguage;
+            this.store.Fallback = this.options.DefaultLanguage;
         }
     }
 
@@ -89,18 +89,18 @@ public sealed class TranslateService
     public Observable<Translations> SetDefaultLang(string lang)
     {
         // Default is equal to requested and we already have it
-        if (lang == DefaultLang && store.Languages.TryGet(lang, out Translations? current))
+        if (lang == Fallback && store.Languages.TryGet(lang, out Translations? current))
         {
             return Observable.Return(current);
         }
         // we already have this language
         else if (store.Languages.TryGet(lang, out Translations? translations))
         {
-            ChangeDefaultLang(lang);
+            ChangeFallback(lang);
             return Observable.Return(translations);
         }
         // load the new language
-        ChangeDefaultLang(lang);
+        ChangeFallback(lang);
         return LoadTranslation(lang);
     }
 
@@ -112,18 +112,18 @@ public sealed class TranslateService
     public Observable<Translations> SetCurrentLang(string lang)
     {
         // Current is equal to requested and we already have it
-        if (lang == CurrentLang && store.Languages.TryGet(lang, out Translations? current))
+        if (lang == Current && store.Languages.TryGet(lang, out Translations? current))
         {
             return Observable.Return(current);
         }
         // we already have this language
         else if (store.Languages.TryGet(lang, out Translations? translations))
         {
-            ChangeLang(lang);
+            ChangeCurrent(lang);
             return Observable.Return(translations);
         }
         // load the new language
-        ChangeLang(lang);
+        ChangeCurrent(lang);
         return LoadTranslation(lang);
     }
 
@@ -134,23 +134,23 @@ public sealed class TranslateService
     /// <param name="merge">Whether to merge with the current translations or replace them.</param>
     /// <remarks>
     /// If there is already a loading request it will be returned.
-    /// You can call <see cref="ResetLang(string)"/> to cancel it and load again.
+    /// You can call <see cref="Reset(string)"/> to cancel it and load again.
     /// </remarks>
     /// <returns>An observable sequence of translations for the specified language.</returns>
     public Observable<Translations> LoadTranslation(string lang, bool merge = false)
     {
-        return translationsLoading.GetOrAdd(lang, lang => new TranslationLoader(this, lang, merge)).Load;
+        return translationLoaders.GetOrAdd(lang, lang => new TranslationLoader(this, lang, merge)).Load;
     }
 
     /// <summary>
     /// Adds available languages.
     /// </summary>
     /// <param name="langs">The languages to add.</param>
-    public void AddLangs(params ReadOnlySpan<string> langs)
+    public void AddAvailable(params ReadOnlySpan<string> langs)
     {
         foreach (string lang in langs)
         {
-            Langs.Add(lang);
+            Available.Add(lang);
         }
     }
 
@@ -158,27 +158,27 @@ public sealed class TranslateService
     /// Changes the current language.
     /// </summary>
     /// <param name="lang">The language to set as current.</param>
-    private void ChangeLang(string lang)
+    private void ChangeCurrent(string lang)
     {
-        store.Lang = lang;
+        store.Current = lang;
         // if there is no default language, use the one that we just set
-        if (string.IsNullOrEmpty(DefaultLang))
+        if (string.IsNullOrEmpty(Fallback))
         {
-            ChangeDefaultLang(lang);
+            ChangeFallback(lang);
         }
     }
 
     /// <summary>
-    /// Changes the default language.
+    /// Changes the fallback language.
     /// </summary>
-    /// <param name="lang">The language to set as default.</param>
-    private void ChangeDefaultLang(string lang)
+    /// <param name="lang">The language to set as fallback.</param>
+    private void ChangeFallback(string lang)
     {
-        store.DefaultLang = lang;
+        store.Fallback = lang;
         // if there is no current language, use the one that we just set
-        if (string.IsNullOrEmpty(CurrentLang))
+        if (string.IsNullOrEmpty(Current))
         {
-            ChangeLang(lang);
+            ChangeCurrent(lang);
         }
     }
 
@@ -188,9 +188,9 @@ public sealed class TranslateService
     /// <param name="lang">The language to reload.</param>
     /// <param name="merge">Whether to merge with the current translations or replace them.</param>
     /// <returns>An observable sequence of translations for the reloaded language.</returns>
-    public Observable<Translations> ReloadLang(string lang, bool merge = false)
+    public Observable<Translations> Reload(string lang, bool merge = false)
     {
-        ResetLang(lang);
+        Reset(lang);
         return LoadTranslation(lang, merge);
     }
 
@@ -198,9 +198,9 @@ public sealed class TranslateService
     /// Deletes inner translations for the provided language.
     /// </summary>
     /// <param name="lang">The language key to reset.</param>
-    public void ResetLang(string lang)
+    public void Reset(string lang)
     {
-        if (translationsLoading.TryRemove(lang, out var loader) && loader.IsValueCreated)
+        if (translationLoaders.TryRemove(lang, out var loader) && loader.IsValueCreated)
         {
             loader.Value.Dispose();
         }
@@ -219,9 +219,9 @@ public sealed class TranslateService
         if (store.Languages.TryGet(Current, out var translations) && translations.TryGetParsedResult(key, parameters, parser, out var translateString))
         {
             return translateString;
-    }
+        }
         else if (store.Languages.TryGet(Fallback, out translations) && translations.TryGetParsedResult(key, parameters, parser, out translateString))
-    {
+        {
             return translateString;
         }
         return new TranslateString(key, parameters, parser);
@@ -229,7 +229,6 @@ public sealed class TranslateService
 
     /// <summary>
     /// Returns a translation instantly from the internal state of loaded translations.
-    /// All rules regarding the current language, the preferred language, or even fallback languages will be used except any promise handling.
     /// </summary>
     /// <param name="lang">The language to use for translation.</param>
     /// <param name="key">The key of the translation.</param>
@@ -314,7 +313,7 @@ public sealed class TranslateService
                 .Do((service, lang, merge), static (translations, state) =>
                 {
                     var (service, lang, merge) = state;
-                    service.Langs.Add(lang);
+                    service.Available.Add(lang);
                     translations = service.compiler.CompileTranslations(translations, lang);
                     if (merge)
                         service.store.Languages.Get(lang).Merge(translations);
