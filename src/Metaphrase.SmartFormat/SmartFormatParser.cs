@@ -47,12 +47,6 @@ public sealed class SmartFormatParser : TranslateParser
     }
 
     /// <inheritdoc/>
-    public override bool ShouldInterpolate(string expr)
-    {
-        return expr.Contains('{') && expr.Contains('}');
-    }
-
-    /// <inheritdoc/>
     public override string Interpolate(string expr, object? parameters)
     {
         return parameters is null
