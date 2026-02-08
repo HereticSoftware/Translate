@@ -13,9 +13,14 @@ public sealed class TranslateService
 {
     private readonly TranslateStore store;
     private readonly TranslateLoader loader;
-    private readonly TranslateParser parser;
     private readonly TranslateCompiler compiler;
+    private readonly TranslateParser parser;
     private readonly TranslateServiceOptions options;
+#if NET9_0_OR_GREATER
+    private readonly Lock setGate = new();
+#else
+    private readonly object setGate = new();
+#endif
 
     private readonly ConcurrentLazyDictionary<string, TranslationLoader> translationLoaders = [];
 
@@ -59,20 +64,20 @@ public sealed class TranslateService
     /// </summary>
     /// <param name="store">An instance of the store (that is supposed to be unique).</param>
     /// <param name="loader">An instance of the loader to use.</param>
-    /// <param name="parser">An instance of the parser currently used.</param>
     /// <param name="compiler">An instance of the compiler currently used.</param>
+    /// <param name="parser">An instance of the parser currently used.</param>
     /// <param name="options">Options to configure the current service.</param>
     public TranslateService(
         TranslateStore? store = null,
         TranslateLoader? loader = null,
-        TranslateParser? parser = null,
         TranslateCompiler? compiler = null,
+        TranslateParser? parser = null,
         TranslateServiceOptions? options = null)
     {
         this.store = store ?? new();
         this.loader = loader ?? DefaultTranslateLoader.Instance;
-        this.parser = parser ?? DefaultTranslateParser.Instance;
         this.compiler = compiler ?? DefaultTranslateCompiler.Instance;
+        this.parser = parser ?? DefaultTranslateParser.Instance;
         this.options = options ?? new();
 
         if (!string.IsNullOrEmpty(this.options.DefaultLanguage))
@@ -270,8 +275,20 @@ public sealed class TranslateService
         return translations.Select(t => t.GetParsedResult(key, parameters, parser).ToString());
     }
 
-    // todo: Add the GetMany method.
-    // todo: Consider adding the Set and SetMany methods.
+    /// <summary>
+    /// Sets the translated value of a key for a specific language, after compiling it.
+    /// </summary>
+    /// <param name="lang">The language for which to set the translation.</param>
+    /// <param name="key">The key of the translation to set.</param>
+    /// <param name="value">The translation value to compile and store.</param>
+    public void Set(string lang, string key, string value)
+    {
+        var translations = store.Languages.Get(lang);
+        lock (setGate)
+        {
+            translations[key] = compiler.Compile(value, lang);
+        }
+    }
 
     /// <summary>
     /// Defines a bitwise OR operator for translating a string using a specified translation service.
