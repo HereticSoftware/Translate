@@ -4,11 +4,6 @@ file class TestParser : TranslateParser
 {
     public object? Parameters { get; private set; }
 
-    public override bool ShouldInterpolate(string expr)
-    {
-        return DefaultTranslateParser.Instance.ShouldInterpolate(expr);
-    }
-
     public override string Interpolate(string expr, object? parameters)
     {
         Parameters = parameters;

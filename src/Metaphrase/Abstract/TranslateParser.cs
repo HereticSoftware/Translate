@@ -6,13 +6,6 @@
 public abstract class TranslateParser
 {
     /// <summary>
-    /// Determines whether the given expression should be interpolated.
-    /// </summary>
-    /// <param name="expr">The expression string to evaluate.</param>
-    /// <returns>True if the expression should be interpolated; otherwise, false.</returns>
-    public abstract bool ShouldInterpolate(string expr);
-
-    /// <summary>
     /// Interpolates a string to replace parameters.
     /// </summary>
     /// <param name="expr">The expression string containing placeholders.</param>

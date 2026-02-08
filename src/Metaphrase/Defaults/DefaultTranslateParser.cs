@@ -19,15 +19,9 @@ public sealed partial class DefaultTranslateParser : TranslateParser
     public static DefaultTranslateParser Instance { get; } = new();
 
     /// <inheritdoc/>
-    public override bool ShouldInterpolate(string expr)
-    {
-        return ParameterRegex().IsMatch(expr);
-    }
-
-    /// <inheritdoc/>
     public override string Interpolate(string expr, object? parameters)
     {
-        if (parameters is null)
+        if (parameters is null || !ParameterRegex().IsMatch(expr))
         {
             return expr;
         }
