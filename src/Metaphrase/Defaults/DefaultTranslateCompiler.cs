@@ -14,6 +14,12 @@ public sealed class DefaultTranslateCompiler : TranslateCompiler
     public static DefaultTranslateCompiler Instance { get; } = new();
 
     /// <inheritdoc/>
+    public override string Compile(string input, string lang)
+    {
+        return input;
+    }
+
+    /// <inheritdoc/>
     public override Translations CompileTranslations(Translations translations, string lang)
     {
         return translations;
