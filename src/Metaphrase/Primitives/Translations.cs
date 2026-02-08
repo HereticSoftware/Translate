@@ -111,6 +111,24 @@ public sealed class Translations : IEnumerable<KeyValuePair<string, string>>, ID
     }
 
     /// <summary>
+    /// Gets the parsed result for the specified key using the provided parameters and parser.
+    /// </summary>
+    /// <param name="key">The key of the translation.</param>
+    /// <param name="parameters">The parameters to use for parsing.</param>
+    /// <param name="parser">The parser to use for parsing.</param>
+    /// <returns>A <see cref="TranslateString"/> containing the parsed result.</returns>
+    public bool TryGetParsedResult(string key, object? parameters, TranslateParser? parser, out TranslateString translateString)
+    {
+        if (store.TryGetValue(key, out var value))
+        {
+            translateString = new(value, parameters, parser);
+            return true;
+        }
+        translateString = default;
+        return false;
+    }
+
+    /// <summary>
     /// Creates a <see cref="Translations"/> object from a <see cref="JsonDocument"/>.
     /// </summary>
     /// <param name="json">The JSON document to parse.</param>

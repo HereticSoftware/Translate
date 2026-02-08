@@ -209,29 +209,22 @@ public sealed class TranslateService
 
     /// <summary>
     /// Returns a translation instantly from the internal state of loaded translations.
-    /// All rules regarding the current language, the preferred language, or even fallback languages will be used except any promise handling.
+    /// If Current is not available Fallback is attepmted. Otherwise the key is returned as is.
     /// </summary>
     /// <param name="key">The key of the translation.</param>
     /// <param name="parameters">The parameters to use for parsing.</param>
     /// <returns>A <see cref="TranslateString"/> containing the translated value.</returns>
     public TranslateString Instant(string key, object? parameters)
     {
-        // todo: If not found return default depending on options
-        // todo: Implement missing handler
-        return Instant(CurrentLang, key, parameters);
+        if (store.Languages.TryGet(Current, out var translations) && translations.TryGetParsedResult(key, parameters, parser, out var translateString))
+        {
+            return translateString;
     }
-
-    /// <summary>
-    /// Gets the translated value of a key.
-    /// </summary>
-    /// <param name="key">The key of the translation.</param>
-    /// <param name="parameters">The parameters to use for parsing.</param>
-    /// <returns>An observable sequence of the translated value.</returns>
-    public Observable<string> Get(string key, object? parameters = null)
+        else if (store.Languages.TryGet(Fallback, out translations) && translations.TryGetParsedResult(key, parameters, parser, out translateString))
     {
-        // todo: If not found return default depending on options
-        // todo: Implement missing handler
-        return Get(CurrentLang, key, parameters);
+            return translateString;
+        }
+        return new TranslateString(key, parameters, parser);
     }
 
     /// <summary>
@@ -252,6 +245,19 @@ public sealed class TranslateService
     /// <summary>
     /// Gets the translated value of a key.
     /// </summary>
+    /// <remarks>If the language is not available it will be loaded.</remarks>
+    /// <param name="key">The key of the translation.</param>
+    /// <param name="parameters">The parameters to use for parsing.</param>
+    /// <returns>An observable sequence of the translated value.</returns>
+    public Observable<string> Get(string key, object? parameters = null)
+    {
+        return Get(Current, key, parameters);
+    }
+
+    /// <summary>
+    /// Gets the translated value of a key.
+    /// </summary>
+    /// <remarks>If the language is not available it will be loaded.</remarks>
     /// <param name="lang">The language to use for translation.</param>
     /// <param name="key">The key of the translation.</param>
     /// <param name="parameters">The parameters to use for parsing.</param>
