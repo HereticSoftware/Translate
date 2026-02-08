@@ -62,7 +62,7 @@ public sealed class TranslateServiceTests
     [Timeout(10_000)]
     public async Task Load_Should_Be_Thread_Safe(CancellationToken cancellationToken)
     {
-        var loader = new CustomLoader(TimeSpan.FromMilliseconds(100));
+        var loader = new CustomLoader(TimeSpan.FromMilliseconds(10));
         var service = new TranslateService(loader: loader);
         var iterations = Enumerable.Range(1, 100);
 
