@@ -69,7 +69,7 @@ public sealed class TranslateServiceTests
         await Parallel.ForEachAsync(iterations, cancellationToken, body: async (i, ct) =>
         {
             await service
-                .LoadTranslation("en")
+                .LoadTranslations("en")
                 .FirstAsync(ct)
                 .WaitAsync(TimeSpan.FromSeconds(5), ct);
         });

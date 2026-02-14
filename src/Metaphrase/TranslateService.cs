@@ -110,7 +110,7 @@ public sealed class TranslateService
         }
         // load the new language
         store.Current = lang;
-        return LoadTranslation(lang);
+        return LoadTranslations(lang);
     }
 
     /// <summary>
@@ -133,7 +133,7 @@ public sealed class TranslateService
         }
         // load the new language
         store.Fallback = lang;
-        return LoadTranslation(lang);
+        return LoadTranslations(lang);
     }
 
     /// <summary>
@@ -146,7 +146,7 @@ public sealed class TranslateService
     /// You can call <see cref="Reset(string)"/> to cancel it and load again or <see cref="Reload(string, bool)"/> that does exactly that.
     /// </remarks>
     /// <returns>An observable sequence of translations for the specified language.</returns>
-    public Observable<Translations> LoadTranslation(string lang, bool merge = false)
+    public Observable<Translations> LoadTranslations(string lang, bool merge = false)
     {
         return translationLoaders.GetOrAdd(lang, lang => new TranslationLoader(this, lang, merge)).Load;
     }
@@ -173,7 +173,7 @@ public sealed class TranslateService
     public Observable<Translations> Reload(string lang, bool merge = false)
     {
         Reset(lang);
-        return LoadTranslation(lang, merge);
+        return LoadTranslations(lang, merge);
     }
 
     /// <summary>
@@ -248,7 +248,7 @@ public sealed class TranslateService
     {
         var translations = store.Languages.TryGet(lang, out Translations? value)
             ? Observable.Return(value)
-            : LoadTranslation(lang);
+            : LoadTranslations(lang);
 
         return translations.Select(t => t.GetParsedResult(key, parameters, parser).ToString());
     }
