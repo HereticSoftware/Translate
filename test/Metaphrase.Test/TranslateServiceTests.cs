@@ -37,20 +37,20 @@ public sealed class TranslateServiceTests
         var loader = new CustomLoader(TimeSpan.FromMilliseconds(100));
         var service = new TranslateService(loader: loader);
 
-        service.SetCurrentLang("en").Subscribe(); // Call 1 and 0 return
+        service.SetCurrentAndLoad("en").Subscribe(); // Call 1 and 0 return
         service.Reset("en");
 
         await That(loader.CallCount).IsEqualTo(1);
         await That(loader.ReturnCount).IsEqualTo(0);
 
-        service.SetCurrentLang("en").Subscribe(); // Call 2 and 1 return
+        service.SetCurrentAndLoad("en").Subscribe(); // Call 2 and 1 return
         await Task.Delay(TimeSpan.FromMilliseconds(200));
 
         await That(loader.CallCount).IsEqualTo(2);
         await That(loader.ReturnCount).IsEqualTo(1);
 
-        await service.SetCurrentLang("en").FirstAsync(); // Call 2 and 1 return
-        await service.SetCurrentLang("en").FirstAsync(); // Call 2 and 1 return
+        await service.SetCurrentAndLoad("en").FirstAsync(); // Call 2 and 1 return
+        await service.SetCurrentAndLoad("en").FirstAsync(); // Call 2 and 1 return
 
         await That(loader.CallCount).IsEqualTo(2);
         await That(loader.ReturnCount).IsEqualTo(1);
@@ -62,7 +62,7 @@ public sealed class TranslateServiceTests
     [Timeout(10_000)]
     public async Task Load_Should_Be_Thread_Safe(CancellationToken cancellationToken)
     {
-        var loader = new CustomLoader(TimeSpan.FromMilliseconds(10));
+        var loader = new CustomLoader(TimeSpan.FromMilliseconds(2));
         var service = new TranslateService(loader: loader);
         var iterations = Enumerable.Range(1, 100);
 

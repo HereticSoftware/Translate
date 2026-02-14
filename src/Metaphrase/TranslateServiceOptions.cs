@@ -1,4 +1,6 @@
-﻿namespace Metaphrase;
+﻿using Metaphrase.Primitives;
+
+namespace Metaphrase;
 
 /// <summary>
 /// Options for configuring the translation service.
@@ -6,23 +8,22 @@
 public sealed record TranslateServiceOptions
 {
     /// <summary>
-    /// Gets or sets a value indicating whether to use the default language translation
-    /// when the current language translation is missing.
+    /// Gets the current language to use for translations.
     /// </summary>
-    /// <value>
-    /// <c>true</c> if the default language translation should be used; otherwise, <c>false</c>.
-    /// </value>
-    /// <remarks>Default is <c>false</c>.</remarks>
-    public bool UseDefaultLang { get; init; }
+    public string Current { get; init; } = string.Empty;
 
     /// <summary>
-    /// Gets or sets the default language to use for translations.
+    /// Gets the fallback language to use for translations.
     /// </summary>
-    /// <value>
-    /// The default language code as a <see cref="string"/>.
-    /// </value>
-    /// <remarks>
-    /// The default value is an empty string.
-    /// </remarks>
-    public string DefaultLanguage { get; init; } = string.Empty;
+    public string Fallback { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Gets an array of available language codes with translations.
+    /// </summary>
+    public string[] Available { get; init; } = [];
+
+    /// <summary>
+    /// Gets a value indicating whether to emit change notifications when translations are updated.
+    /// </summary>
+    public bool EmitChanges { get; init; }
 }

@@ -1,5 +1,6 @@
 ﻿using Metaphrase.Primitives;
 using Metaphrase.Primitives.Events;
+using Metaphrase.Primitives.Internal;
 
 namespace Metaphrase;
 
@@ -9,37 +10,48 @@ namespace Metaphrase;
 /// <remarks>Language keys are compared using <see cref="StringComparer.OrdinalIgnoreCase"/></remarks>
 public sealed class TranslateStore : IDisposable
 {
-    private readonly Subject<LanguageChangeEvent> onFallbackLangChange = new();
-    private readonly Subject<LanguageChangeEvent> onCurrentChange = new();
+    private readonly LazySubject<LanguageChangeEvent> onFallbackLangChange;
+    private readonly LazySubject<LanguageChangeEvent> onCurrentChange;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="TranslateStore"/> class with default values.
     /// </summary>
-    public TranslateStore()
+    /// <param name="emitChanges">A value indicating whether to emit change events. Default is <c>true</c>.</param>
+    public TranslateStore(bool emitChanges = true)
     {
-        Fallback = Current = string.Empty;
+        Current = string.Empty;
+        Fallback = string.Empty;
+        onFallbackLangChange = new(emitChanges);
+        onCurrentChange = new(emitChanges);
     }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="TranslateStore"/> class with a specified fallback language.
+    /// Initializes a new instance of the <see cref="TranslateStore"/> class with the specified current language.
     /// </summary>
-    /// <param name="fallbackLang">The fallback language to set.</param>
-    public TranslateStore(string fallbackLang)
+    /// <param name="current">The language to set as the current language.</param>
+    /// <param name="emitChanges">A value indicating whether to emit change events. Default is <c>true</c>.</param>
+    public TranslateStore(string current, bool emitChanges = true)
     {
-        Fallback = Current = fallbackLang;
+        Current = current;
+        Fallback = string.Empty;
         Available.Add(Fallback);
+        onFallbackLangChange = new(emitChanges);
+        onCurrentChange = new(emitChanges);
     }
 
     /// <summary>
-    /// Gets or sets the fallback language to fallback when translations are missing on the current language.
+    /// Initializes a new instance of the <see cref="TranslateStore"/> class with the specified current and fallback languages.
     /// </summary>
-    public string Fallback
+    /// <param name="current">The language to set as the current language.</param>
+    /// <param name="fallbackLang">The language to set as the fallback language.</param>
+    /// <param name="emitChanges">A value indicating whether to emit change events. Default is <c>true</c>.</param>
+    public TranslateStore(string current, string fallbackLang, bool emitChanges = true)
     {
-        get;
-        set {
-            field = value;
-            onCurrentChange.OnNext(new(value, Languages.Get(value)));
-        }
+        Current = current;
+        Fallback = fallbackLang;
+        Available.Add(Fallback);
+        onFallbackLangChange = new(emitChanges);
+        onCurrentChange = new(emitChanges);
     }
 
     /// <summary>
@@ -55,9 +67,21 @@ public sealed class TranslateStore : IDisposable
     }
 
     /// <summary>
+    /// Gets or sets the fallback language to fallback when translations are missing on the current language.
+    /// </summary>
+    public string Fallback
+    {
+        get;
+        set {
+            field = value;
+            onFallbackLangChange.OnNext(new(value, Languages.Get(value)));
+        }
+    }
+
+    /// <summary>
     /// Gets the list of available languages.
     /// </summary>
-    public HashSet<string> Available { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public HashSet<string> Available { get; } = [with(StringComparer.OrdinalIgnoreCase)];
 
     /// <summary>
     /// Gets the list of translations per language.
