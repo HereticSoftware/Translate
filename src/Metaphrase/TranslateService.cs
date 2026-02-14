@@ -95,7 +95,7 @@ public sealed class TranslateService
     /// </summary>
     /// <param name="lang">The language code to set as current.</param>
     /// <returns>An observable sequence of translations for the current language.</returns>
-    public Observable<Translations> SetCurrentAndLoad(string lang)
+    public Observable<Translations> SetCurrent(string lang)
     {
         // Current is equal to requested and we already have it
         if (lang == Current && store.Languages.TryGet(lang, out Translations? current))
@@ -110,17 +110,17 @@ public sealed class TranslateService
         }
         // load the new language
         store.Current = lang;
-        return LoadTranslations(lang);
+        return Load(lang);
     }
 
     /// <summary>
-    /// Sets the default language to use as a fallback and loads its translations if not already available.
+    /// Sets the fallback language to use as a fallback and loads its translations if not already available.
     /// </summary>
     /// <param name="lang">The language code to set as the fallback language.</param>
     /// <returns>An observable sequence of translations for the fallback language.</returns>
-    public Observable<Translations> SetFallbackAndLoad(string lang)
+    public Observable<Translations> SetFallback(string lang)
     {
-        // Default is equal to requested and we already have it
+        // fallback is equal to requested and we already have it
         if (lang == Fallback && store.Languages.TryGet(lang, out Translations? current))
         {
             return Observable.Return(current);
@@ -133,22 +133,21 @@ public sealed class TranslateService
         }
         // load the new language
         store.Fallback = lang;
-        return LoadTranslations(lang);
+        return Load(lang);
     }
 
     /// <summary>
-    /// Gets translations for a given language.
+    /// Load translations for a given language if they have not been loaded yet.
     /// </summary>
     /// <param name="lang">The language to load.</param>
-    /// <param name="merge">Whether to merge with the current translations or replace them.</param>
     /// <remarks>
     /// If there is already a loading request or the language has already been loaded it will be returned.
     /// You can call <see cref="Reset(string)"/> to cancel it and load again or <see cref="Reload(string, bool)"/> that does exactly that.
     /// </remarks>
     /// <returns>An observable sequence of translations for the specified language.</returns>
-    public Observable<Translations> LoadTranslations(string lang, bool merge = false)
+    public Observable<Translations> Load(string lang)
     {
-        return translationLoaders.GetOrAdd(lang, lang => new TranslationLoader(this, lang, merge)).Load;
+        return translationLoaders.GetOrAdd(lang, lang => new TranslationLoader(this, lang)).Load;
     }
 
     /// <summary>
@@ -165,15 +164,14 @@ public sealed class TranslateService
     }
 
     /// <summary>
-    /// Reloads the provided language.
+    /// Reloads the provided language by calling <see cref="Reset(string)"/> and then <see cref="Load(string)"/>.
     /// </summary>
     /// <param name="lang">The language to reload.</param>
-    /// <param name="merge">Whether to merge with the current translations or replace them.</param>
     /// <returns>An observable sequence of translations for the reloaded language.</returns>
-    public Observable<Translations> Reload(string lang, bool merge = false)
+    public Observable<Translations> Reload(string lang)
     {
         Reset(lang);
-        return LoadTranslations(lang, merge);
+        return Load(lang);
     }
 
     /// <summary>
@@ -187,8 +185,6 @@ public sealed class TranslateService
             Available.Add(lang);
         }
     }
-
-
 
     /// <summary>
     /// Returns a translation instantly from the internal state of loaded translations.
@@ -248,7 +244,7 @@ public sealed class TranslateService
     {
         var translations = store.Languages.TryGet(lang, out Translations? value)
             ? Observable.Return(value)
-            : LoadTranslations(lang);
+            : Load(lang);
 
         return translations.Select(t => t.GetParsedResult(key, parameters, parser).ToString());
     }
@@ -296,24 +292,20 @@ public sealed class TranslateService
         /// </summary>
         /// <param name="service">The translation service that provides access to language resources and parsing functionality.</param>
         /// <param name="lang">The language code for which to load translations.</param>
-        /// <param name="merge">A value indicating whether to merge the new translations with existing ones or replace them.</param>
         /// <summary>
         /// Initializes a new instance of the <see cref="TranslationLoader"/> struct.
         /// </summary>
         /// <param name="lang">The language code for which to load translations.</param>
-        public TranslationLoader(TranslateService service, string lang, bool merge)
+        public TranslationLoader(TranslateService service, string lang)
         {
             Load = CreateDefer((service, lang), static state => state.service.loader.GetTranslation(state.lang))
                 .TakeUntil(cts.Token)
-                .Do((service, lang, merge), static (translations, state) =>
+                .Do((service, lang), static (translations, state) =>
                 {
-                    var (service, lang, merge) = state;
+                    var (service, lang) = state;
                     service.Available.Add(lang);
                     translations = service.compiler.CompileTranslations(translations, lang);
-                    if (merge)
-                        service.store.Languages.Get(lang).Merge(translations);
-                    else
-                        service.store.Languages.Set(lang, translations);
+                    service.store.Languages.Set(lang, translations);
                 })
                 .Replay()
                 .RefCount();

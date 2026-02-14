@@ -37,20 +37,20 @@ public sealed class TranslateServiceTests
         var loader = new CustomLoader(TimeSpan.FromMilliseconds(100));
         var service = new TranslateService(loader: loader);
 
-        service.SetCurrentAndLoad("en").Subscribe(); // Call 1 and 0 return
+        service.SetCurrent("en").Subscribe(); // Call 1 and 0 return
         service.Reset("en");
 
         await That(loader.CallCount).IsEqualTo(1);
         await That(loader.ReturnCount).IsEqualTo(0);
 
-        service.SetCurrentAndLoad("en").Subscribe(); // Call 2 and 1 return
+        service.SetCurrent("en").Subscribe(); // Call 2 and 1 return
         await Task.Delay(TimeSpan.FromMilliseconds(200));
 
         await That(loader.CallCount).IsEqualTo(2);
         await That(loader.ReturnCount).IsEqualTo(1);
 
-        await service.SetCurrentAndLoad("en").FirstAsync(); // Call 2 and 1 return
-        await service.SetCurrentAndLoad("en").FirstAsync(); // Call 2 and 1 return
+        await service.SetCurrent("en").FirstAsync(); // Call 2 and 1 return
+        await service.SetCurrent("en").FirstAsync(); // Call 2 and 1 return
 
         await That(loader.CallCount).IsEqualTo(2);
         await That(loader.ReturnCount).IsEqualTo(1);
@@ -69,7 +69,7 @@ public sealed class TranslateServiceTests
         await Parallel.ForEachAsync(iterations, cancellationToken, body: async (i, ct) =>
         {
             await service
-                .LoadTranslations("en")
+                .Load("en")
                 .FirstAsync(ct)
                 .WaitAsync(TimeSpan.FromSeconds(5), ct);
         });
