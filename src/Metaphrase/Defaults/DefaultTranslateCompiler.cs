@@ -14,14 +14,14 @@ public sealed class DefaultTranslateCompiler : TranslateCompiler
     public static DefaultTranslateCompiler Instance { get; } = new();
 
     /// <inheritdoc/>
-    public override string Compile(string input, string lang)
+    public override Observable<string> Compile(string language, string translation)
     {
-        return input;
+        return Observable.Return(translation);
     }
 
     /// <inheritdoc/>
-    public override Translations CompileTranslations(Translations translations, string lang)
+    public override Observable<Translations> Compile(string language, Translations translations)
     {
-        return translations;
+        return Observable.Return(translations);
     }
 }
