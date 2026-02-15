@@ -1,6 +1,4 @@
-﻿using Metaphrase.Abstract;
-using Metaphrase.Primitives.Events;
-using System.Collections;
+﻿using System.Collections;
 using System.Text.Json;
 
 namespace Metaphrase.Primitives;
@@ -8,23 +6,23 @@ namespace Metaphrase.Primitives;
 /// <summary>
 /// Represents a collection of translations.
 /// </summary>
-/// <remarks>Language keys are compared using <see cref="StringComparer.Ordinal"/></remarks>
-public sealed class Translations : IEnumerable<KeyValuePair<string, string>>, IDisposable
+/// <remarks>Translation keys are compared using <see cref="StringComparer.Ordinal"/>.</remarks>
+public sealed class Translations : IEnumerable<KeyValuePair<string, string>>
 {
-    private readonly Subject<TranslationChangeEvent> onTranslationChange = new();
-    private readonly Dictionary<string, string> store;
+#if NET9_0_OR_GREATER
+    private readonly Lock mergeGate = new();
+#else
+    private readonly object mergeGate = new();
+#endif
 
-    /// <summary>
-    /// Gets an observable that notifies when a translation changes.
-    /// </summary>
-    public Observable<TranslationChangeEvent> OnTranslationChange => onTranslationChange.AsObservable();
+    private readonly Dictionary<string, string> store;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="Translations"/> class.
     /// </summary>
     public Translations()
     {
-        store = new(StringComparer.Ordinal);
+        store = [with(StringComparer.Ordinal)];
     }
 
     /// <summary>
@@ -52,80 +50,99 @@ public sealed class Translations : IEnumerable<KeyValuePair<string, string>>, ID
     /// <returns>The translation if found; otherwise, the key.</returns>
     public string this[string key]
     {
-        get => store.GetValueOrDefault(key, key);
-        set {
-            store[key] = value;
-            onTranslationChange.OnNext(new(key, value));
-        }
+        get => Get(key);
+        set => Set(key, value);
     }
 
     /// <summary>
-    /// Merges the specified dictionary of values into the current translations.
-    /// </summary>
-    /// <param name="values">The dictionary of values to merge.</param>
-    public void Merge(Translations translations)
-    {
-        foreach (var (k, v) in translations.store)
-        {
-            store[k] = v;
-        }
-        onTranslationChange.OnNext(TranslationChangeEvent.Multiple);
-    }
-
-    /// <summary>
-    /// Merges the specified dictionary of values into the current translations.
-    /// </summary>
-    /// <param name="values">The dictionary of values to merge.</param>
-    public void Merge(IDictionary<string, string> values)
-    {
-        foreach (var (k, v) in values)
-        {
-            store[k] = v;
-        }
-        onTranslationChange.OnNext(TranslationChangeEvent.Multiple);
-    }
-
-    /// <summary>
-    /// Merges the specified dictionary of values into the current translations.
-    /// </summary>
-    /// <param name="values">The dictionary of values to merge.</param>
-    public void Merge(IEnumerable<KeyValuePair<string, string>> values)
-    {
-        foreach (var (k, v) in values)
-        {
-            store[k] = v;
-        }
-        onTranslationChange.OnNext(TranslationChangeEvent.Multiple);
-    }
-
-    /// <summary>
-    /// Gets the parsed result for the specified key using the provided parameters and parser.
+    /// Tries to get the translation for the specified key.
     /// </summary>
     /// <param name="key">The key of the translation.</param>
-    /// <param name="parameters">The parameters to use for parsing.</param>
-    /// <param name="parser">The parser to use for parsing.</param>
-    /// <returns>A <see cref="TranslateString"/> containing the parsed result.</returns>
-    public TranslateString GetParsedResult(string key, object? parameters, TranslateParser? parser)
+    /// <param name="translation">The translation.</param>
+    /// <returns>The true if found; otherwise false.</returns>
+    public bool TryGet(string key, [NotNullWhen(true)] out string? translation)
     {
-        return new(this[key], parameters, parser);
+        return store.TryGetValue(key, out translation);
     }
 
     /// <summary>
-    /// Gets the parsed result for the specified key using the provided parameters and parser.
+    /// Gets the translation for the specified key.
     /// </summary>
     /// <param name="key">The key of the translation.</param>
-    /// <param name="parameters">The parameters to use for parsing.</param>
-    /// <param name="parser">The parser to use for parsing.</param>
-    /// <returns>A <see cref="TranslateString"/> containing the parsed result.</returns>
-    public bool TryGetParsedResult(string key, object? parameters, TranslateParser? parser, out TranslateString translateString)
+    /// <returns>The translation if found; otherwise, the key.</returns>
+    public string Get(string key)
     {
-        if (store.TryGetValue(key, out var value))
+        return store.GetValueOrDefault(key, key);
+    }
+
+    /// <summary>
+    /// Sets the translation for the specified key.
+    /// </summary>
+    /// <param name="key">The key of the translation.</param>
+    /// <param name="translation">The translation.</param>
+    public void Set(string key, string translation)
+    {
+        store[key] = translation;
+    }
+
+    /// <summary>
+    /// Removes the translation for the specified key.
+    /// </summary>
+    /// <param name="key">The key of the translation.</param>
+    public void Remove(string key)
+    {
+        store.Remove(key);
+    }
+
+    /// <summary>
+    /// Merges the specified dictionary of values into the current translations.
+    /// </summary>
+    /// <param name="values">The dictionary of values to merge.</param>
+    /// <remarks>Same keys will replace older values.</remarks>
+    public Translations Merge(Translations translations)
+    {
+        lock (mergeGate)
         {
-            translateString = new(value, parameters, parser);
-            return true;
+            foreach (var (k, v) in translations.store)
+            {
+                store[k] = v;
+            }
+            return this;
         }
-        translateString = default;
-        return false;
+    }
+
+    /// <summary>
+    /// Merges the specified dictionary of values into the current translations.
+    /// </summary>
+    /// <param name="values">The dictionary of values to merge.</param>
+    /// <remarks>Same keys will replace older values.</remarks>
+    public Translations Merge(IDictionary<string, string> values)
+    {
+        lock (mergeGate)
+        {
+            foreach (var (k, v) in values)
+            {
+                store[k] = v;
+            }
+            return this;
+        }
+    }
+
+    /// <summary>
+    /// Merges the specified dictionary of values into the current translations.
+    /// </summary>
+    /// <param name="values">The dictionary of values to merge.</param>
+    /// <remarks>Same keys will replace older values.</remarks>
+    public Translations Merge(IEnumerable<KeyValuePair<string, string>> values)
+    {
+        lock (mergeGate)
+        {
+            foreach (var (k, v) in values)
+            {
+                store[k] = v;
+            }
+            return this;
+        }
     }
 
     /// <summary>
@@ -203,12 +220,6 @@ public sealed class Translations : IEnumerable<KeyValuePair<string, string>>, ID
     public IEnumerator<KeyValuePair<string, string>> GetEnumerator()
     {
         return store.GetEnumerator();
-    }
-
-    /// <inheritdoc/>
-    public void Dispose()
-    {
-        onTranslationChange.Dispose();
     }
 
     /// <inheritdoc/>

@@ -1,5 +1,4 @@
-﻿using Metaphrase.Primitives.Events;
-using Metaphrase.Primitives.Internal;
+﻿using Metaphrase.Primitives.Internal;
 using System.Runtime.CompilerServices;
 
 namespace Metaphrase.Primitives;
@@ -7,16 +6,10 @@ namespace Metaphrase.Primitives;
 /// <summary>
 /// Manages a collection of language translations.
 /// </summary>
-/// <remarks>Language keys are compared using <see cref="StringComparer.OrdinalIgnoreCase"/></remarks>
-public sealed class Languages : IDisposable
+/// <remarks>Language keys are compared using <see cref="StringComparer.OrdinalIgnoreCase"/>.</remarks>
+public sealed class Languages
 {
-    private readonly Subject<LanguageTranslationChangeEvent> onTranslationChange = new();
-    private readonly ConcurrentLazyDictionary<string, TranslationsWrapper> store;
-
-    /// <summary>
-    /// Gets an observable sequence that notifies when a language translation changes.
-    /// </summary>
-    public Observable<LanguageTranslationChangeEvent> OnTranslationChange => onTranslationChange.AsObservable();
+    private readonly ConcurrentLazyDictionary<string, Translations> store;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="Languages"/> class.
@@ -27,37 +20,35 @@ public sealed class Languages : IDisposable
     }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="Languages"/> class with the specified initial languages.
+    /// Initializes a new instance of the <see cref="Languages"/> class with the specified initial languages and their translations.
     /// </summary>
     /// <param name="languages">The initial languages and their translations.</param>
     public Languages(IDictionary<string, Translations> languages)
     {
-        var observer = onTranslationChange.AsObserver();
-        var wrapped = languages.Select(kv => new TranslationsWrapper(kv, observer).ToKv(kv.Key));
-        store = new(wrapped, StringComparer.OrdinalIgnoreCase);
+        store = new(languages, StringComparer.OrdinalIgnoreCase);
     }
 
     /// <summary>
     /// Determines whether the collection contains the specified language key.
     /// </summary>
-    /// <param name="key">The language key to locate in the collection.</param>
+    /// <param name="language">The language key to locate in the collection.</param>
     /// <returns>true if the collection contains an element with the specified key; otherwise, false.</returns>
-    public bool Contains(string key)
+    public bool Contains(string language)
     {
-        return store.ContainsKey(key);
+        return store.ContainsKey(language);
     }
 
     /// <summary>
     /// Tries to get the translations for the specified language key.
     /// </summary>
-    /// <param name="key">The language key.</param>
+    /// <param name="language">The language key.</param>
     /// <param name="result">When this method returns, contains the translations associated with the specified key, if the key is found; otherwise, null.</param>
     /// <returns>true if the language key is found; otherwise, false.</returns>
-    public bool TryGet(string key, [NotNullWhen(true)] out Translations? result)
+    public bool TryGet(string language, [NotNullWhen(true)] out Translations? result)
     {
-        if (store.TryGetValue(key, out var lazy))
+        if (store.TryGetValue(language, out var lazy))
         {
-            result = lazy.Value.Inner;
+            result = lazy.Value;
             return true;
         }
         Unsafe.SkipInit(out result);
@@ -67,78 +58,34 @@ public sealed class Languages : IDisposable
     /// <summary>
     /// Gets the translations for the specified language key.
     /// </summary>
-    /// <param name="key">The language key.</param>
+    /// <param name="language">The language key.</param>
     /// <returns>The translations for the specified language key.</returns>
-    public Translations Get(string key)
+    public Translations Get(string language)
     {
-        var onTranslationChange = this.onTranslationChange;
-        var value = store.GetOrAdd(key, key => new TranslationsWrapper(key, new(), onTranslationChange.AsObserver()));
-        return value.Inner;
+        return store.GetOrAdd(language, key => new());
     }
 
     /// <summary>
     /// Sets the translations for the specified language key.
     /// </summary>
-    /// <param name="key">The language key.</param>
+    /// <param name="language">The language key.</param>
     /// <param name="value">The translations to set.</param>
-    public void Set(string key, Translations value)
+    /// <param name="merge">true to merge the translations with existing translations; false to replace them entirely.</param>
+    public void Set(string language, Translations value, bool merge = false)
     {
-        var onTranslationChange = this.onTranslationChange;
         store.AddOrUpdate(
-            key: key,
-            addFactory: key => new TranslationsWrapper(key, new(), onTranslationChange.AsObserver()),
-            updateFactory: (key, previous) =>
-            {
-                previous.Dispose();
-                return new TranslationsWrapper(key, value, onTranslationChange.AsObserver());
-            }
+            key: language,
+            addFactory: key => new(),
+            updateFactory: (key, previous) => merge ? previous.Merge(value) : value
         );
     }
 
     /// <summary>
     /// Removes the translations for the specified language key.
     /// </summary>
-    /// <param name="key">The language key.</param>
-    public void Remove(string key)
+    /// <param name="language">The language key.</param>
+    public void Remove(string language)
     {
-        if (store.TryRemove(key, out var value) && value.IsValueCreated)
-        {
-            value.Value.Dispose();
-        }
-    }
-
-    /// <inheritdoc/>
-    public void Dispose()
-    {
-        onTranslationChange.Dispose();
-    }
-
-    private readonly struct TranslationsWrapper : IDisposable
-    {
-        private readonly IDisposable sub;
-
-        public Translations Inner { get; }
-
-        public TranslationsWrapper(string key, Translations inner, Observer<LanguageTranslationChangeEvent> observer)
-        {
-            Inner = inner;
-            sub = inner.OnTranslationChange.Select(key, static (on, key) => new LanguageTranslationChangeEvent(key, on.Key, on.Translation)).Subscribe(observer);
-        }
-
-        public TranslationsWrapper(KeyValuePair<string, Translations> kv, Observer<LanguageTranslationChangeEvent> observer)
-        {
-            Inner = kv.Value;
-            sub = kv.Value.OnTranslationChange.Select(kv.Key, static (on, key) => new LanguageTranslationChangeEvent(key, on.Key, on.Translation)).Subscribe(observer);
-        }
-
-        public KeyValuePair<string, TranslationsWrapper> ToKv(string key)
-        {
-            return KeyValuePair.Create(key, this);
-        }
-
-        public void Dispose()
-        {
-            sub.Dispose();
-        }
+        store.TryRemove(language, out _);
     }
 }
