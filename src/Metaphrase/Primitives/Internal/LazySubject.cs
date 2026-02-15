@@ -18,14 +18,9 @@ internal readonly struct LazySubject<T> : IDisposable
         subject.Value.OnNext(value);
     }
 
-    public Observer<T> AsObserver()
-    {
-        return subject.Value.AsObserver();
-    }
-
     public Observable<T> AsObservable()
     {
-        return subject.Value.AsObservable();
+        return emitChanges ? subject.Value.AsObservable() : Observable.Empty<T>();
     }
 
     /// <inheritdoc/>
