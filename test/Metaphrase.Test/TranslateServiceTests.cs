@@ -37,20 +37,20 @@ public sealed class TranslateServiceTests
         var loader = new CustomLoader(TimeSpan.FromMilliseconds(100));
         var service = new TranslateService(loader: loader);
 
-        service.SetCurrent("en").Subscribe(); // Call 1 and 0 return
+        service.LoadAndSetCurrent("en").Subscribe(); // Call 1 and 0 return
         service.Reset("en");
 
         await That(loader.CallCount).IsEqualTo(1);
         await That(loader.ReturnCount).IsEqualTo(0);
 
-        service.SetCurrent("en").Subscribe(); // Call 2 and 1 return
+        service.LoadAndSetCurrent("en").Subscribe(); // Call 2 and 1 return
         await Task.Delay(TimeSpan.FromMilliseconds(200));
 
         await That(loader.CallCount).IsEqualTo(2);
         await That(loader.ReturnCount).IsEqualTo(1);
 
-        await service.SetCurrent("en").FirstAsync(); // Call 2 and 1 return
-        await service.SetCurrent("en").FirstAsync(); // Call 2 and 1 return
+        await service.LoadAndSetCurrent("en").FirstAsync(); // Call 2 and 1 return
+        await service.LoadAndSetCurrent("en").FirstAsync(); // Call 2 and 1 return
 
         await That(loader.CallCount).IsEqualTo(2);
         await That(loader.ReturnCount).IsEqualTo(1);

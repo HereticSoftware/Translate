@@ -11,167 +11,87 @@ namespace Metaphrase;
 /// </summary>
 public sealed class TranslateService
 {
-    private readonly TranslateStore store;
+    private readonly LazySubject<LanguageChangeEvent> onFallbackLangChange;
+    private readonly LazySubject<LanguageChangeEvent> onCurrentChange;
+
+    private readonly TranslateCache cache;
     private readonly TranslateLoader loader;
     private readonly TranslateCompiler compiler;
     private readonly TranslateParser parser;
     private readonly TranslateServiceOptions options;
-#if NET9_0_OR_GREATER
-    private readonly Lock setGate = new();
-#else
-    private readonly object setGate = new();
-#endif
 
     private readonly ConcurrentLazyDictionary<string, TranslationLoader> translationLoaders = [];
 
     /// <summary>
-    /// The default language to fallback when translations are missing in the current language.
+    /// Gets or sets the language currently used.
     /// </summary>
-    public string Fallback => store.Fallback;
+    public string Current
+    {
+        get;
+        set {
+            if (field == value) return;
+            field = value;
+            onCurrentChange.OnNext(new(value));
+        }
+    }
 
     /// <summary>
-    /// The language currently used.
+    /// Gets or sets the fallback language to fallback when translations are missing on the current language.
     /// </summary>
-    public string Current => store.Current;
+    /// <remarks>Empty string disables the fallback.</remarks>
+    public string Fallback
+    {
+        get;
+        set {
+            if (field == value) return;
+            field = value;
+            onFallbackLangChange.OnNext(new(value));
+        }
+    }
 
     /// <summary>
-    /// A list of available languages.
+    /// Gets the list of available languages.
     /// </summary>
-    public HashSet<string> Available => store.Available;
-
-    /// <summary>
-    /// A list of translations per language.
-    /// </summary>
-    public Languages Languages => store.Languages;
+    /// <remarks>The set is created using <see cref="StringComparer.OrdinalIgnoreCase"/>.</remarks>
+    public HashSet<string> Available { get; }
 
     /// <summary>
     /// An observable to listen to fallback language change events.
     /// </summary>
-    public Observable<LanguageChangeEvent> OnFallbackLangChange => store.OnFallbackLangChange;
+    public Observable<LanguageChangeEvent> OnFallbackLangChange => onFallbackLangChange.AsObservable();
 
     /// <summary>
     /// An observable to listen to language change events.
     /// </summary>
-    public Observable<LanguageChangeEvent> OnCurrentChange => store.OnCurrentChange;
-
-    /// <summary>
-    /// An observable to listen to translation change events.
-    /// </summary>
-    public Observable<LanguageTranslationChangeEvent> OnTranslationChange => store.OnTranslationChange;
+    public Observable<LanguageChangeEvent> OnCurrentChange => onCurrentChange.AsObservable();
 
     /// <summary>
     /// Initializes a new instance of the <see cref="TranslateService"/> class.
     /// </summary>
+    /// <param name="parser">An instance of the parser to use.</param>
     /// <param name="loader">An instance of the loader to use.</param>
-    /// <param name="parser">An instance of the parser currently used.</param>
-    /// <param name="compiler">An instance of the compiler currently used.</param>
-    /// <param name="store">An instance of the store (that is supposed to be unique).</param>
-    /// <param name="options">Options to configure the current service.</param>
+    /// <param name="compiler">An instance of the compiler to use.</param>
+    /// <param name="cache">An instance of the cache to use.</param>
+    /// <param name="options">Options to configure the service.</param>
     public TranslateService(
+        TranslateParser? parser = null,
         TranslateLoader? loader = null,
         TranslateCompiler? compiler = null,
-        TranslateParser? parser = null,
-        TranslateStore? store = null,
+        TranslateCache? cache = null,
         TranslateServiceOptions? options = null)
     {
-        this.store = store ?? new(options?.EmitChanges ?? true);
+        this.parser = parser ?? DefaultTranslateParser.Instance;
         this.loader = loader ?? DefaultTranslateLoader.Instance;
         this.compiler = compiler ?? DefaultTranslateCompiler.Instance;
-        this.parser = parser ?? DefaultTranslateParser.Instance;
+        this.cache = cache ?? new DefaultTranslateCache();
         this.options = options ?? new();
 
-        if (!string.IsNullOrEmpty(this.options.Current))
-        {
-            this.store.Current = this.options.Current;
-        }
-        if (!string.IsNullOrEmpty(this.options.Fallback))
-        {
-            this.store.Fallback = this.options.Fallback;
-        }
-    }
+        Current = this.options.Current;
+        Fallback = this.options.Fallback;
+        Available = [with(StringComparer.OrdinalIgnoreCase), .. this.options.Available];
 
-    /// <summary>
-    /// Sets the language to use as the current language and loads its translations if not already available.
-    /// </summary>
-    /// <param name="lang">The language code to set as current.</param>
-    /// <returns>An observable sequence of translations for the current language.</returns>
-    public Observable<Translations> SetCurrent(string lang)
-    {
-        // Current is equal to requested and we already have it
-        if (lang == Current && store.Languages.TryGet(lang, out Translations? current))
-        {
-            return Observable.Return(current);
-        }
-        // we already have this language
-        else if (store.Languages.TryGet(lang, out Translations? translations))
-        {
-            store.Current = lang;
-            return Observable.Return(translations);
-        }
-        // load the new language
-        store.Current = lang;
-        return Load(lang);
-    }
-
-    /// <summary>
-    /// Sets the fallback language to use as a fallback and loads its translations if not already available.
-    /// </summary>
-    /// <param name="lang">The language code to set as the fallback language.</param>
-    /// <returns>An observable sequence of translations for the fallback language.</returns>
-    public Observable<Translations> SetFallback(string lang)
-    {
-        // fallback is equal to requested and we already have it
-        if (lang == Fallback && store.Languages.TryGet(lang, out Translations? current))
-        {
-            return Observable.Return(current);
-        }
-        // we already have this language
-        else if (store.Languages.TryGet(lang, out Translations? translations))
-        {
-            store.Fallback = lang;
-            return Observable.Return(translations);
-        }
-        // load the new language
-        store.Fallback = lang;
-        return Load(lang);
-    }
-
-    /// <summary>
-    /// Load translations for a given language if they have not been loaded yet.
-    /// </summary>
-    /// <param name="lang">The language to load.</param>
-    /// <remarks>
-    /// If there is already a loading request or the language has already been loaded it will be returned.
-    /// You can call <see cref="Reset(string)"/> to cancel it and load again or <see cref="Reload(string, bool)"/> that does exactly that.
-    /// </remarks>
-    /// <returns>An observable sequence of translations for the specified language.</returns>
-    public Observable<Translations> Load(string lang)
-    {
-        return translationLoaders.GetOrAdd(lang, lang => new TranslationLoader(this, lang)).Load;
-    }
-
-    /// <summary>
-    /// Deletes inner translations for the provided language.
-    /// </summary>
-    /// <param name="lang">The language key to reset.</param>
-    public void Reset(string lang)
-    {
-        if (translationLoaders.TryRemove(lang, out var loader) && loader.IsValueCreated)
-        {
-            loader.Value.Dispose();
-        }
-        store.Languages.Remove(lang);
-    }
-
-    /// <summary>
-    /// Reloads the provided language by calling <see cref="Reset(string)"/> and then <see cref="Load(string)"/>.
-    /// </summary>
-    /// <param name="lang">The language to reload.</param>
-    /// <returns>An observable sequence of translations for the reloaded language.</returns>
-    public Observable<Translations> Reload(string lang)
-    {
-        Reset(lang);
-        return Load(lang);
+        onFallbackLangChange = new(this.options.EmitChanges);
+        onCurrentChange = new(this.options.EmitChanges);
     }
 
     /// <summary>
@@ -187,6 +107,96 @@ public sealed class TranslateService
     }
 
     /// <summary>
+    /// Load translations for a given language if they have not been loaded yet.
+    /// </summary>
+    /// <param name="language">The language to load.</param>
+    /// <remarks>
+    /// If there is already a loading request or the language has already been loaded it will be returned.
+    /// You can call <see cref="Reset(string)"/> to cancel it and load again or <see cref="Reload(string, bool)"/> that does exactly that.
+    /// </remarks>
+    /// <returns>An observable sequence of translations for the specified language.</returns>
+    public Observable<Translations> Load(string language)
+    {
+        if (string.IsNullOrEmpty(language))
+            return Observable.Empty<Translations>();
+
+        Available.Add(language);
+        return translationLoaders.GetOrAdd(language, lang => new TranslationLoader(this, lang)).Load;
+    }
+
+    /// <summary>
+    /// Load the current language translations if they have not been loaded yet.
+    /// </summary>
+    /// <returns>An observable sequence of translations for the current language.</returns>
+    public Observable<Translations> LoadCurrent()
+    {
+        return Load(Current); ;
+    }
+
+    /// <summary>
+    /// Set the current language and load it's translations if they have not been loaded yet.
+    /// </summary>
+    /// <returns>An observable sequence of translations for the current language.</returns>
+    public Observable<Translations> LoadAndSetCurrent(string current)
+    {
+        Current = current;
+        return LoadCurrent();
+    }
+
+    /// <summary>
+    /// Load the fallback language translations if they have not been loaded yet.
+    /// </summary>
+    /// <returns>An observable sequence of translations for the fallback language.</returns>
+    public Observable<Translations> LoadFallback()
+    {
+        return Load(Fallback);
+    }
+
+    /// <summary>
+    /// Set the fallback language and load it's translations if they have not been loaded yet.
+    /// </summary>
+    /// <returns>An observable sequence of translations for the fallback language.</returns>
+    public Observable<Translations> LoadAndSetFallback(string fallback)
+    {
+        Fallback = fallback;
+        return LoadFallback();
+    }
+
+    /// <summary>
+    /// Deletes translations for the provided language.
+    /// </summary>
+    /// <param name="language">The language key to reset.</param>
+    public Observable<Unit> Reset(string language)
+    {
+        if (translationLoaders.TryRemove(language, out var loader) && loader.IsValueCreated)
+        {
+            loader.Value.Dispose();
+        }
+        return cache.Remove(language);
+    }
+
+    /// <summary>
+    /// Reloads the provided language by calling <see cref="Reset(string)"/> and then <see cref="Load(string)"/>.
+    /// </summary>
+    /// <param name="lang">The language to reload.</param>
+    /// <returns>An observable sequence of translations for the reloaded language.</returns>
+    public Observable<Translations> Reload(string lang)
+    {
+        Reset(lang);
+        return Load(lang);
+    }
+
+    /// <summary>
+    /// Gets the translations of a language.
+    /// </summary>
+    /// <param name="language">The language key.</param>
+    /// <returns>An observable sequence of the translations.</returns>
+    public Translations Instant(string language)
+    {
+        return cache.Instant(language);
+    }
+
+    /// <summary>
     /// Returns a translation instantly from the internal state of loaded translations.
     /// If Current is not available Fallback is attepmted (if configured). Otherwise the key is returned as is.
     /// </summary>
@@ -195,13 +205,13 @@ public sealed class TranslateService
     /// <returns>A <see cref="TranslateString"/> containing the translated value.</returns>
     public TranslateString Instant(string key, object? parameters)
     {
-        if (store.Languages.TryGet(Current, out var translations) && translations.TryGetParsedResult(key, parameters, parser, out var translateString))
+        if (cache.TryInstant(Current, key, out var value))
         {
-            return translateString;
+            return new TranslateString(value, parameters, parser);
         }
-        else if (!string.IsNullOrEmpty(Fallback) && store.Languages.TryGet(Fallback, out translations) && translations.TryGetParsedResult(key, parameters, parser, out translateString))
+        else if (!string.IsNullOrEmpty(Fallback) && cache.TryInstant(Fallback, key, out value))
         {
-            return translateString;
+            return new TranslateString(value, parameters, parser);
         }
         return new TranslateString(key, parameters, parser);
     }
@@ -215,53 +225,88 @@ public sealed class TranslateService
     /// <returns>A <see cref="TranslateString"/> containing the translated value.</returns>
     public TranslateString Instant(string lang, string key, object? parameters)
     {
-        return store.Languages.TryGet(lang, out var translations)
-            ? translations.GetParsedResult(key, parameters, parser)
+        return cache.TryInstant(lang, key, out var value)
+            ? new TranslateString(value, parameters, parser)
             : new TranslateString(key, parameters, parser);
+    }
+
+    /// <summary>
+    /// Gets the translations of a language.
+    /// </summary>
+    /// <param name="language">The language key.</param>
+    /// <returns>An observable sequence of the translations.</returns>
+    public Observable<Translations> Get(string language)
+    {
+        return cache.Get(language);
     }
 
     /// <summary>
     /// Gets the translated value of a key.
     /// </summary>
-    /// <remarks>If the language is not available it will be loaded.</remarks>
     /// <param name="key">The key of the translation.</param>
     /// <param name="parameters">The parameters to use for parsing.</param>
     /// <returns>An observable sequence of the translated value.</returns>
     public Observable<string> Get(string key, object? parameters = null)
     {
-        return Get(Current, key, parameters);
+        return Get(Current, key, parameters)
+            .Select(
+                state: (service: this, key, parameters),
+                selector: static (value, s) => value == s.key && !string.IsNullOrEmpty(s.service.Fallback)
+                    ? s.service.Get(s.service.Fallback, s.key, s.parameters)
+                    : Observable.Return(value)
+            )
+            .SelectMany(static v => v);
     }
 
     /// <summary>
     /// Gets the translated value of a key.
     /// </summary>
-    /// <remarks>If the language is not available it will be loaded.</remarks>
-    /// <param name="lang">The language to use for translation.</param>
+    /// <param name="language">The language to use for translation.</param>
     /// <param name="key">The key of the translation.</param>
-    /// <param name="parameters">The parameters to use for parsing.</param>
+    /// <param name="parameters">The parameters to use during parsing.</param>
     /// <returns>An observable sequence of the translated value.</returns>
-    public Observable<string> Get(string lang, string key, object? parameters = null)
+    public Observable<string> Get(string language, string key, object? parameters = null)
     {
-        var translations = store.Languages.TryGet(lang, out Translations? value)
-            ? Observable.Return(value)
-            : Load(lang);
-
-        return translations.Select(t => t.GetParsedResult(key, parameters, parser).ToString());
+        return cache
+            .Get(language, key)
+            // todo: use missing handler
+            .Select((parameters, parser), static (value, s) => new TranslateString(value, s.parameters, s.parser).ToString());
     }
 
     /// <summary>
-    /// Sets the translated value of a key for a specific language, after compiling it.
+    /// Sets the translations of a specific language, after compiling it.
     /// </summary>
-    /// <param name="lang">The language for which to set the translation.</param>
+    /// <param name="language">The language for which to set the translations.</param>
+    /// <param name="translations">The translations to set.</param>
+    /// <param name="merge">Whether to merge the new translations with existing translations.</param>
+    public Observable<Unit> Set(string language, Translations translations, bool merge = false)
+    {
+        return Observable
+            .Defer(static () => Observable.Return(Unit.Default))
+            // compile
+            .Select((compiler, language, translations), static (_, s) => s.compiler.Compile(s.language, s.translations))
+            .SelectMany(static t => t)
+            // cache
+            .Select((cache, language, merge), static (translations, s) => s.cache.Set(s.language, translations, s.merge))
+            .SelectMany(static x => x);
+    }
+
+    /// <summary>
+    /// Sets the translation of a key for a specific language, after compiling it.
+    /// </summary>
+    /// <param name="language">The language for which to set the translation.</param>
     /// <param name="key">The key of the translation to set.</param>
     /// <param name="value">The translation value to compile and store.</param>
-    public void Set(string lang, string key, string value)
+    public Observable<Unit> Set(string language, string key, string value)
     {
-        var translations = store.Languages.Get(lang);
-        lock (setGate)
-        {
-            translations[key] = compiler.Compile(value, lang);
-        }
+        return Observable
+            .Defer(static () => Observable.Return(Unit.Default))
+            // compile
+            .Select((compiler, language, value), static (_, s) => s.compiler.Compile(s.language, s.value))
+            .SelectMany(static t => t)
+            // cache
+            .Select((cache, language, key), static (value, s) => s.cache.Set(s.language, s.key, value))
+            .SelectMany(static x => x);
     }
 
     /// <summary>
@@ -291,22 +336,24 @@ public sealed class TranslateService
         /// Initializes a new instance of the <see cref="TranslationLoader"/> struct.
         /// </summary>
         /// <param name="service">The translation service that provides access to language resources and parsing functionality.</param>
-        /// <param name="lang">The language code for which to load translations.</param>
+        /// <param name="language">The language code for which to load translations.</param>
         /// <summary>
         /// Initializes a new instance of the <see cref="TranslationLoader"/> struct.
         /// </summary>
-        /// <param name="lang">The language code for which to load translations.</param>
-        public TranslationLoader(TranslateService service, string lang)
+        /// <param name="language">The language code for which to load translations.</param>
+        public TranslationLoader(TranslateService service, string language)
         {
-            Load = CreateDefer((service, lang), static state => state.service.loader.GetTranslation(state.lang))
+            Load = Observable
+                .Defer(static () => Observable.Return(Unit.Default))
+                // load
+                .Select((service, language), static (_, s) => s.service.loader.GetTranslation(s.language))
+                .SelectMany(static t => t)
+                // set
+                .Select((service, language), static (translations, s) => s.service.Set(s.language, translations).Select(translations, static (_, t) => t))
+                .SelectMany(static t => t)
+                // cancel
                 .TakeUntil(cts.Token)
-                .Do((service, lang), static (translations, state) =>
-                {
-                    var (service, lang) = state;
-                    service.Available.Add(lang);
-                    translations = service.compiler.CompileTranslations(translations, lang);
-                    service.store.Languages.Set(lang, translations);
-                })
+                // ensure all receive the same observable
                 .Replay()
                 .RefCount();
         }
@@ -316,30 +363,6 @@ public sealed class TranslateService
         {
             cts.Cancel();
             cts.Dispose();
-        }
-    }
-
-    internal static Defer<T, TState> CreateDefer<T, TState>(TState state, Func<TState, Observable<T>> observableFactory, bool rawObserver = false)
-    {
-        return new Defer<T, TState>(state, observableFactory, rawObserver);
-    }
-
-    internal sealed class Defer<T, TState>(TState state, Func<TState, Observable<T>> observableFactory, bool rawObserver) : Observable<T>
-    {
-        protected override IDisposable SubscribeCore(Observer<T> observer)
-        {
-            var observable = default(Observable<T>);
-            try
-            {
-                observable = observableFactory(state);
-            }
-            catch (Exception ex)
-            {
-                observer.OnCompleted(ex); // when failed, return Completed(Error)
-                return Disposable.Empty;
-            }
-
-            return observable.Subscribe(rawObserver ? observer : observer.Wrap());
         }
     }
 }
