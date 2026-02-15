@@ -25,5 +25,5 @@ public sealed record TranslateServiceOptions
     /// <summary>
     /// Gets a value indicating whether to emit change notifications when translations are updated.
     /// </summary>
-    public bool EmitChanges { get; init; }
+    public bool EmitChanges { get; init; } = true;
 }
