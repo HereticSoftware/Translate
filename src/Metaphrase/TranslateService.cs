@@ -16,6 +16,7 @@ public sealed class TranslateService
 
     private readonly TranslateCache cache;
     private readonly TranslateLoader loader;
+    private readonly TranslateMissingHandler missingHandler;
     private readonly TranslateCompiler compiler;
     private readonly TranslateParser parser;
     private readonly TranslateServiceOptions options;
@@ -70,18 +71,21 @@ public sealed class TranslateService
     /// </summary>
     /// <param name="parser">An instance of the parser to use.</param>
     /// <param name="loader">An instance of the loader to use.</param>
+    /// <param name="missingHandler">An instance of the missing translation handler to use.</param>
     /// <param name="compiler">An instance of the compiler to use.</param>
     /// <param name="cache">An instance of the cache to use.</param>
     /// <param name="options">Options to configure the service.</param>
     public TranslateService(
         TranslateParser? parser = null,
         TranslateLoader? loader = null,
+        TranslateMissingHandler? missingHandler = null,
         TranslateCompiler? compiler = null,
         TranslateCache? cache = null,
         TranslateServiceOptions? options = null)
     {
         this.parser = parser ?? DefaultTranslateParser.Instance;
         this.loader = loader ?? DefaultTranslateLoader.Instance;
+        this.missingHandler = missingHandler ?? DefaultTranslateMissingHandler.Instance;
         this.compiler = compiler ?? DefaultTranslateCompiler.Instance;
         this.cache = cache ?? new DefaultTranslateCache();
         this.options = options ?? new();
@@ -269,7 +273,13 @@ public sealed class TranslateService
     {
         return cache
             .Get(language, key)
-            // todo: use missing handler
+            .Select(
+                state: (service: this, language, key),
+                selector: static (value, s) => value == s.key
+                    ? s.service.missingHandler.Handle(s.language, s.key, s.service)
+                    : Observable.Return(value)
+            )
+            .SelectMany(static v => v)
             .Select((parameters, parser), static (value, s) => new TranslateString(value, s.parameters, s.parser).ToString());
     }
 
