@@ -75,7 +75,7 @@ public sealed class Languages
     {
         store.AddOrUpdate(
             key: language,
-            addFactory: key => new(),
+            addFactory: key => value,
             updateFactory: (key, previous) => merge ? previous.Merge(value) : value
         );
     }

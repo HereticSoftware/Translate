@@ -1,4 +1,6 @@
-﻿namespace Metaphrase.Primitives.Internal;
+﻿using System.Runtime.CompilerServices;
+
+namespace Metaphrase.Primitives.Internal;
 
 internal sealed class ConcurrentLazyDictionary<TKey, TValue> : ConcurrentDictionary<TKey, Lazy<TValue>> where TKey : notnull
 {
@@ -42,11 +44,22 @@ internal sealed class ConcurrentLazyDictionary<TKey, TValue> : ConcurrentDiction
     public TValue AddOrUpdate(TKey key, Func<TKey, TValue> addFactory, Func<TKey, TValue, TValue> updateFactory)
     {
         var lazy = AddOrUpdate(
-            key:key,
+            key: key,
             addValueFactory: key => new Lazy<TValue>(() => addFactory(key)),
             updateValueFactory: (key, old) => new Lazy<TValue>(() => updateFactory(key, old.Value))
         );
         return lazy.Value;
+    }
+
+    public bool TryGet(TKey key, [MaybeNullWhen(false)] out TValue value)
+    {
+        if (TryGetValue(key, out var lazy))
+        {
+            value = lazy.Value;
+            return true;
+        }
+        Unsafe.SkipInit(out value);
+        return false;
     }
 
     private static IEnumerable<KeyValuePair<TKey, Lazy<TValue>>> ToLazy(IEnumerable<KeyValuePair<TKey, TValue>> collection)
