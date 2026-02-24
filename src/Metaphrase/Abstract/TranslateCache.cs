@@ -53,7 +53,7 @@ public abstract class TranslateCache
     /// <param name="translations">The translations to set.</param>
     /// <param name="merge">If <see langword="true"/>, merges the translations with existing ones; otherwise, replaces them.</param>
     /// <returns>An observable that completes when the operation is finished.</returns>
-    public abstract Observable<Unit> Set(string language, Translations translations, bool merge = false);
+    public abstract Observable<Translations> Set(string language, Translations translations, bool merge = false);
 
     /// <summary>
     /// Set a translation value for the specified language and key.
@@ -62,7 +62,7 @@ public abstract class TranslateCache
     /// <param name="key">The translation key.</param>
     /// <param name="value">The translation value to set.</param>
     /// <returns>An observable that completes when the operation is finished.</returns>
-    public abstract Observable<Unit> Set(string language, string key, string value);
+    public abstract Observable<string> Set(string language, string key, string value);
 
     /// <summary>
     /// Remove the translations for the specified language.

@@ -42,30 +42,42 @@ public sealed class DefaultTranslateCache : TranslateCache
     }
 
     /// <inheritdoc/>
-    public override Observable<Unit> Set(string language, Translations translations, bool merge = false)
+    public override Observable<Translations> Set(string language, Translations translations, bool merge = false)
     {
-        languages.Set(language, translations, merge);
-        return Observable.Return(Unit.Default);
+        return Observable.Defer((languages, language, translations, merge), static s =>
+        {
+            s.languages.Set(s.language, s.translations, s.merge);
+            return Observable.Return(s.translations);
+        });
     }
 
     /// <inheritdoc/>
-    public override Observable<Unit> Set(string language, string key, string value)
+    public override Observable<string> Set(string language, string key, string value)
     {
-        languages.Get(language).Set(key, value);
-        return Observable.Return(Unit.Default);
+        return Observable.Defer((languages, language, key, value), static s =>
+        {
+            s.languages.Get(s.language).Set(s.key, s.value);
+            return Observable.Return(s.value);
+        });
     }
 
     /// <inheritdoc/>
     public override Observable<Unit> Remove(string language)
     {
-        languages.Remove(language);
-        return Observable.Return(Unit.Default);
+        return Observable.Defer((languages, language), static s =>
+        {
+            s.languages.Remove(s.language);
+            return Observable.Return(Unit.Default);
+        });
     }
 
     /// <inheritdoc/>
     public override Observable<Unit> Remove(string language, string key)
     {
-        languages.Get(language).Remove(key);
-        return Observable.Return(Unit.Default);
+        return Observable.Defer((languages, language, key), static s =>
+        {
+            s.languages.Get(s.language).Remove(s.key);
+            return Observable.Return(Unit.Default);
+        });
     }
 }
