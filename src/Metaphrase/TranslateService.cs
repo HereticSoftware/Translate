@@ -92,7 +92,7 @@ public sealed class TranslateService
 
         Current = this.options.Current;
         Fallback = this.options.Fallback;
-        Available = [with(StringComparer.OrdinalIgnoreCase), .. this.options.Available];
+        Available = new(this.options.Available, StringComparer.OrdinalIgnoreCase);
 
         onFallbackLangChange = new(this.options.EmitChanges);
         onCurrentChange = new(this.options.EmitChanges);

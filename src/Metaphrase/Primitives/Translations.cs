@@ -22,7 +22,7 @@ public sealed class Translations : IEnumerable<KeyValuePair<string, string>>
     /// </summary>
     public Translations()
     {
-        store = [with(StringComparer.Ordinal)];
+        store = new(StringComparer.Ordinal);
     }
 
     /// <summary>
