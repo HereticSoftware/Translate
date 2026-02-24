@@ -124,7 +124,6 @@ public sealed class TranslateService
         if (string.IsNullOrEmpty(language))
             return Observable.Empty<Translations>();
 
-        Available.Add(language);
         return translationLoaders.GetOrAdd(language, lang => new TranslationLoader(this, lang)).Load;
     }
 
@@ -195,7 +194,7 @@ public sealed class TranslateService
     /// </summary>
     /// <param name="language">The language key.</param>
     /// <returns>An observable sequence of the translations.</returns>
-    public Translations Instant(string language)
+    public Translations InstantTranslations(string language)
     {
         return cache.Instant(language);
     }
@@ -207,7 +206,7 @@ public sealed class TranslateService
     /// <param name="key">The key of the translation.</param>
     /// <param name="parameters">The parameters to use for parsing.</param>
     /// <returns>A <see cref="TranslateString"/> containing the translated value.</returns>
-    public TranslateString Instant(string key, object? parameters)
+    public TranslateString Instant(string key, object? parameters = null)
     {
         if (cache.TryInstant(Current, key, out var value))
         {
@@ -227,7 +226,7 @@ public sealed class TranslateService
     /// <param name="key">The key of the translation.</param>
     /// <param name="parameters">The parameters to use for parsing.</param>
     /// <returns>A <see cref="TranslateString"/> containing the translated value.</returns>
-    public TranslateString Instant(string lang, string key, object? parameters)
+    public TranslateString Instant(string lang, string key, object? parameters = null)
     {
         return cache.TryInstant(lang, key, out var value)
             ? new TranslateString(value, parameters, parser)
@@ -239,9 +238,12 @@ public sealed class TranslateService
     /// </summary>
     /// <param name="language">The language key.</param>
     /// <returns>An observable sequence of the translations.</returns>
-    public Observable<Translations> Get(string language)
+    public Observable<Translations> GetTranslations(string language)
     {
-        return cache.Get(language);
+        return Observable
+            .Defer((translationLoaders, language), static s => s.translationLoaders.TryGet(s.language, out var loader) ? loader.Load : Observable.Return(new Translations()))
+            .Select((cache, language), static (_, s) => s.cache.Get(s.language))
+            .SelectMany(static v => v);
     }
 
     /// <summary>
@@ -253,11 +255,11 @@ public sealed class TranslateService
     public Observable<string> Get(string key, object? parameters = null)
     {
         return Get(Current, key, parameters)
-            .Select(
+            .SelectIf(
                 state: (service: this, key, parameters),
-                selector: static (value, s) => value == s.key && !string.IsNullOrEmpty(s.service.Fallback)
-                    ? s.service.Get(s.service.Fallback, s.key, s.parameters)
-                    : Observable.Return(value)
+                condition: (value, s) => value == s.key && !string.IsNullOrEmpty(s.service.Fallback),
+                whenTrue: (value, s) => s.service.Get(s.service.Fallback, s.key, s.parameters),
+                whenFasle: (value, _) => Observable.Return(value)
             )
             .SelectMany(static v => v);
     }
@@ -271,13 +273,23 @@ public sealed class TranslateService
     /// <returns>An observable sequence of the translated value.</returns>
     public Observable<string> Get(string language, string key, object? parameters = null)
     {
-        return cache
-            .Get(language, key)
-            .Select(
+        return Observable
+            .Defer((translationLoaders, language), static s => s.translationLoaders.TryGet(s.language, out var loader) ? loader.Load : Observable.Return(new Translations()))
+            .Select((cache, language, key), static (_, s) => s.cache.Get(s.language, s.key))
+            .SelectMany(static v => v)
+            .SelectIf(
                 state: (service: this, language, key),
-                selector: static (value, s) => value == s.key
-                    ? s.service.missingHandler.Handle(s.language, s.key, s.service)
-                    : Observable.Return(value)
+                condition: (value, s) => value != s.key || s.service.missingHandler == DefaultTranslateMissingHandler.Instance,
+                whenTrue: (value, _) => Observable.Return(value),
+                whenFasle: (value, s) => s.service.missingHandler
+                    .Handle(s.language, s.key)
+                    .SelectIf(
+                        state: (service: this, language, key),
+                        condition: (value, s) => string.IsNullOrEmpty(value) || value == s.key,
+                        whenTrue: (value, s) => Observable.Return(s.key),
+                        whenFasle: (value, s) => s.service.Set(s.language, s.key, value).Select(value, (_, v) => v)
+                    )
+                    .SelectMany(static v => v)
             )
             .SelectMany(static v => v)
             .Select((parameters, parser), static (value, s) => new TranslateString(value, s.parameters, s.parser).ToString());
@@ -289,7 +301,7 @@ public sealed class TranslateService
     /// <param name="language">The language for which to set the translations.</param>
     /// <param name="translations">The translations to set.</param>
     /// <param name="merge">Whether to merge the new translations with existing translations.</param>
-    public Observable<Unit> Set(string language, Translations translations, bool merge = false)
+    public Observable<Translations> SetTranslations(string language, Translations translations, bool merge = false)
     {
         return Observable
             .Defer(static () => Observable.Return(Unit.Default))
@@ -307,7 +319,7 @@ public sealed class TranslateService
     /// <param name="language">The language for which to set the translation.</param>
     /// <param name="key">The key of the translation to set.</param>
     /// <param name="value">The translation value to compile and store.</param>
-    public Observable<Unit> Set(string language, string key, string value)
+    public Observable<string> Set(string language, string key, string value)
     {
         return Observable
             .Defer(static () => Observable.Return(Unit.Default))
@@ -327,7 +339,18 @@ public sealed class TranslateService
     /// <returns>Returns the translated string based on the provided key and current language.</returns>
     public static TranslateString operator |(string key, TranslateService service)
     {
-        return service.Instant(key, null);
+        return service.Instant(key, parameters: null);
+    }
+
+    /// <summary>
+    /// Defines a bitwise OR operator for translating a string using a specified translation service.
+    /// </summary>
+    /// <param name="service">The translation service that provides access to language resources and parsing functionality.</param>
+    /// <param name="key">The string to be translated based on the current language setting.</param>
+    /// <returns>Returns the translated string based on the provided key and current language.</returns>
+    public static TranslateString operator |(TranslateService service, string key)
+    {
+        return service.Instant(key, parameters: null);
     }
 
     /// <summary>
@@ -359,8 +382,9 @@ public sealed class TranslateService
                 .Select((service, language), static (_, s) => s.service.loader.GetTranslation(s.language))
                 .SelectMany(static t => t)
                 // set
-                .Select((service, language), static (translations, s) => s.service.Set(s.language, translations).Select(translations, static (_, t) => t))
+                .Select((service, language), static (translations, s) => s.service.SetTranslations(s.language, translations).Select(translations, static (_, t) => t))
                 .SelectMany(static t => t)
+                //.Do(cts, static (_, cts) => cts.Cancel())
                 // cancel
                 .TakeUntil(cts.Token)
                 // ensure all receive the same observable

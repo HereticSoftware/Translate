@@ -10,7 +10,6 @@ public abstract class TranslateMissingHandler
     /// </summary>
     /// <param name="language">The language code for which the translation is missing.</param>
     /// <param name="key">The translation key that was not found.</param>
-    /// <param name="service">The translation service instance that can be used to set translations.</param>
     /// <returns>An observable containing the string for the missing translation.</returns> 
-    public abstract Observable<string> Handle(string language, string key, TranslateService service);
+    public abstract Observable<string> Handle(string language, string key);
 }

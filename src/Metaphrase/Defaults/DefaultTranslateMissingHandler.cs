@@ -13,7 +13,7 @@ public sealed class DefaultTranslateMissingHandler : TranslateMissingHandler
     public static DefaultTranslateMissingHandler Instance { get; } = new();
 
     /// <inheritdoc/>
-    public override Observable<string> Handle(string lang, string key, TranslateService service)
+    public override Observable<string> Handle(string language, string key)
     {
         return Observable.Return(key);
     }
