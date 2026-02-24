@@ -41,7 +41,7 @@ public sealed partial class DefaultTranslateParser : TranslateParser
             {
                 if (property.Name.Equals(key, StringComparison.Ordinal))
                 {
-                    return property.GetValue(parameters)?.ToString() ?? match.Value;
+                    return property.GetValue(parameters)?.ToString() ?? string.Empty;
                 }
             }
             return match.Value;
